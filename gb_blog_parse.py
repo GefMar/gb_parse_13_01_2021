@@ -58,20 +58,23 @@ class GbParse:
 
     def post_parse(self, url, soup):
         post_data = {
-            'title': soup.find('h1', attrs={'class': "blogpost-title"}).text,
-            'url': url,
+            "title": soup.find("h1", attrs={"class": "blogpost-title"}).text,
+            "url": url,
         }
         author_tag_name = soup.find("div", attrs={"itemprop": "author"})
-        author = {'name': author_tag_name.text,
-                  'url': urljoin(url, author_tag_name.parent.get('href'))
-                  }
-        tags_a = soup.find('article', attrs={'class': 'blogpost__article-wrapper'}).find_all('a', attrs={'class': "small"})
-        
-        tags = [{'url': urljoin(url, tag.get('href')), 'name': tag.text} for tag in tags_a]
+        author = {
+            "name": author_tag_name.text,
+            "url": urljoin(url, author_tag_name.parent.get("href")),
+        }
+        tags_a = soup.find("article", attrs={"class": "blogpost__article-wrapper"}).find_all(
+            "a", attrs={"class": "small"}
+        )
+
+        tags = [{"url": urljoin(url, tag.get("href")), "name": tag.text} for tag in tags_a]
         return {
-            'post_data': post_data,
-            'author': author,
-            'tags': tags,
+            "post_data": post_data,
+            "author": author,
+            "tags": tags,
         }
 
     def save(self, data):
@@ -79,7 +82,7 @@ class GbParse:
 
 
 if __name__ == "__main__":
-    load_dotenv('.env')
-    db = database.Database(os.getenv('SQL_DB_URL'))
+    load_dotenv(".env")
+    db = database.Database(os.getenv("SQL_DB_URL"))
     parser = GbParse("https://geekbrains.ru/posts", db)
     parser.run()

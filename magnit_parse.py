@@ -1,63 +1,119 @@
 import os
+import datetime as dt
+from dotenv import load_dotenv
 import requests
 from urllib.parse import urljoin
 import bs4
 import pymongo
-from dotenv import load_dotenv
+
+MONTHS = {
+    "янв": 1,
+    "фев": 2,
+    "мар": 3,
+    "апр": 4,
+    "май": 5,
+    "мая": 5,
+    "июн": 6,
+    "июл": 7,
+    "авг": 8,
+    "сен": 9,
+    "окт": 10,
+    "ноя": 11,
+    "дек": 12,
+}
 
 
 class MagnitParser:
-    def __init__(self, start_url, data_client):
+    def __init__(self, start_url, data_base):
         self.start_url = start_url
-        self.data_client = data_client
-        self.data_base = self.data_client["gb_parse_13_01_2021"]
+        self.database = data_base["gb_parse_12_01_2021"]
 
     @staticmethod
-    def _get_response(url, *args, **kwargs):
-        # todo надо обработать ошибки запросов и сделать повторный запрос
+    def __get_response(url, *args, **kwargs):
+        # todo обработать ошибки запросов и статусов тут
         response = requests.get(url, *args, **kwargs)
         return response
 
+    def data_template(self, dates):
+        return {
+            "url": lambda soups: urljoin(self.start_url, soups.attrs.get("href")),
+            "promo_name": lambda soups: soups.find(
+                "div", attrs={"class": "card-sale__header"}
+            ).text,
+            "product_name": lambda soups: str(
+                soups.find("div", attrs={"class": "card-sale__title"}).text
+            ),
+            "old_price": lambda soups: float(
+                ".".join(
+                    itm
+                    for itm in soups.find("div", attrs={"class": "label__price_old"}).text.split()
+                )
+            ),
+            "new_price": lambda soups: float(
+                ".".join(
+                    itm
+                    for itm in soups.find("div", attrs={"class": "label__price_new"}).text.split()
+                )
+            ),
+            "image_url": lambda soups: urljoin(
+                self.start_url, soups.find("img").attrs.get("data-src")
+            ),
+            "date_from": lambda _: next(dates),
+            "date_to": lambda _: next(dates),
+        }
+
     @staticmethod
-    def _get_soup(response):
+    def date_parse(date_string: str):
+        date_list = date_string.replace("с ", "", 1).replace("\n", "").split("до")
+        for date in date_list:
+            temp_date = date.split()
+            yield dt.datetime(
+                year=dt.datetime.now().year,
+                day=int(temp_date[0]),
+                month=MONTHS[temp_date[1][:3]],
+            )
+
+    @staticmethod
+    def __get_soup(response):
         return bs4.BeautifulSoup(response.text, "lxml")
 
     def run(self):
         for product in self.parse(self.start_url):
             self.save(product)
 
-    def parse(self, url) -> dict:
-        soup = self._get_soup(self._get_response(url))
+    def validate_product(self, product_data):
+        return product_data
+
+    def parse(self, url):
+        soup = self.__get_soup(self.__get_response(url))
         catalog_main = soup.find("div", attrs={"class": "сatalogue__main"})
-        for product_tag in catalog_main.find_all("a", attrs={"class": "card-sale"}):
-            yield self._get_product_data(product_tag)
+        for product_tag in catalog_main.find_all(
+            "a", attrs={"class": "card-sale"}, reversive=False
+        ):
+            yield self.__get_product_data(product_tag)
 
-    @property
-    def data_template(self):
-        return {
-            "url": lambda tag: urljoin(self.start_url, tag.attrs.get("href")),
-            "title": lambda tag: tag.find('div', attrs={"class": "card-sale__title"}).text,
-        }
-
-    def _get_product_data(self, product_tag: bs4.Tag) -> dict:
+    def __get_product_data(self, product_tag):
         data = {}
-        for key, pattern in self.data_template.items():
+        try:
+            dt_parser = self.date_parse(
+                product_tag.find("div", attrs={"class": "card-sale__date"}).text
+            )
+        except AttributeError:
+            dt_parser = None
+        for key, pattern in self.data_template(dt_parser).items():
             try:
                 data[key] = pattern(product_tag)
-            except AttributeError:
-                pass
+            except (AttributeError, TypeError):
+                data[key] = None
         return data
 
     def save(self, data):
-        collection = self.data_base["magnit"]
+        collection = self.database["magnit_product"]
         collection.insert_one(data)
-        pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     load_dotenv(".env")
-    data_base_url = os.getenv("DATA_BASE_URL")
-    data_client = pymongo.MongoClient(data_base_url)
-    url = "https://magnit.ru/promo/?geo=moskva"
-    parser = MagnitParser(url, data_client)
+    data_base = pymongo.MongoClient(os.getenv("DATA_BASE_URL"))
+    parser = MagnitParser("https://magnit.ru/promo/?geo=moskva", data_base)
     parser.run()

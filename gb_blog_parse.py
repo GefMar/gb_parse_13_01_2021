@@ -21,6 +21,8 @@ class GbParse:
         return soup
 
     def parse_task(self, url, callback):
+        url = url
+        callback = callback
         def wrap():
             soup = self._get_soup(url)
             return callback(url, soup)
@@ -75,5 +77,5 @@ class GbParse:
 
 if __name__ == "__main__":
     load_dotenv(".env")
-    parser = GbParse("https://geekbrains.ru/posts", Database(os.getenv("SQL_DB")))
+    parser = GbParse("https://geekbrains.ru/posts", Database(os.getenv("SQL_DB_URL")))
     parser.run()

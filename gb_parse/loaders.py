@@ -2,7 +2,7 @@ import re
 from urllib.parse import urljoin
 from scrapy import Selector
 from scrapy.loader import ItemLoader
-from .items import AutoyoulaItem
+from .items import AutoyoulaItem, HHVacancyItem
 from itemloaders.processors import TakeFirst, MapCompose
 
 
@@ -41,3 +41,13 @@ class AutoyoulaLoader(ItemLoader):
     description_out = TakeFirst()
     specifications_in = MapCompose(get_specifications)
     specifications_out = flat_dict
+
+
+class HHVacancyLoader(ItemLoader):
+    default_item_class = HHVacancyItem
+    title_out = TakeFirst()
+    url_out = TakeFirst()
+    description_in = "".join
+    description_out = TakeFirst()
+    salary_in = "".join
+    salary_out = TakeFirst()
